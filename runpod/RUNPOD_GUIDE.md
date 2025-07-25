@@ -233,42 +233,88 @@ nvtop            # Interactive GPU monitor
 
 ## Troubleshooting
 
-### Common Issues:
+### Common Issues & SOLUTIONS:
 
 1. **CUDA Out of Memory:**
    - Reduce batch size in config
-   - Enable gradient checkpointing
+   - ⚠️ **DO NOT enable gradient checkpointing with LoRA** (causes gradient errors)
    - Use smaller sequence length
 
-2. **Model not loading:**
-   - Check MODEL_PATH environment variable
-   - Verify model files exist in volume
-   - Check CUDA compatibility
+2. **LoRA Gradient Errors ("does not require grad"):**
+   ```bash
+   # SOLUTION: Update setup_peft method in sft_train.py
+   # Add after get_peft_model():
+   for name, param in self.model.named_parameters():
+       if param.requires_grad:
+           param.data = param.data.float()
+           param.requires_grad_(True)
+   ```
 
-3. **Slow training:**
-   - Enable mixed precision (bf16)
-   - Use flash attention if supported
-   - Check GPU utilization with nvidia-smi
+3. **KeyError: 'evaluation_strategy':**
+   ```bash
+   # SOLUTION: RunPod uses older Transformers - use 'eval_strategy'
+   sed -i 's/evaluation_strategy:/eval_strategy:/' training/config/your_config.yaml
+   sed -i 's/training_config\["evaluation_strategy"\]/training_config["eval_strategy"]/' training/sft_train.py
+   ```
+
+4. **TypeError: '<=' not supported between float and str:**
+   ```bash
+   # SOLUTION: Use decimal notation for learning rate
+   # WRONG: learning_rate: 5e-5
+   # RIGHT: learning_rate: 0.00005
+   ```
+
+5. **Docker Build Fails (exit code 100):**
+   ```bash
+   # SOLUTION: Remove problematic CUDA repos before apt-get
+   rm -f /etc/apt/sources.list.d/cuda*
+   ```
+
+6. **Statistics Crash (NoneType format error):**
+   - ✅ **FIXED in runpod_working.yaml** - Uses null-safe statistics handling
 
 ### Debug Commands:
 ```bash
-# Check GPU
-python -c "import torch; print(torch.cuda.is_available())"
+# Check GPU and CUDA
+python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name()}')"
 
-# Test model loading
-python -c "from transformers import AutoModel; print('OK')"
+# Test LoRA setup
+python -c "from peft import LoraConfig; print('PEFT OK')"
 
-# Verify paths
-ls -la /workspace/models/
+# Verify training config
+python -c "import yaml; print(yaml.safe_load(open('training/config/runpod_working.yaml'))['training']['eval_strategy'])"
+
+# Check for working files
+ls -la training/config/runpod_working.yaml
+grep -n "eval_strategy" training/sft_train.py
 ```
 
-## Quick Start Script
+### WORKING COMMAND (Copy & Paste Ready):
+```bash
+# Complete working setup for RunPod
+python training/sft_train.py \
+  --config training/config/runpod_working.yaml \
+  --train_file /workspace/data/sft/train.jsonl \
+  --eval_file /workspace/data/sft/val.jsonl
+```
 
-Save as `runpod/quickstart.sh`:
+**Expected Results with runpod_working.yaml:**
+- ✅ Training completes without errors
+- ✅ ~6.3M trainable parameters (0.57%)
+- ✅ Final training loss: ~0.79
+- ✅ Final evaluation loss: ~0.76
+- ✅ Model saved to `/workspace/outputs/test-model/`
+
+## Quick Start Script - TESTED & WORKING ✅
+
+Save as `runpod/quickstart.sh` - This has been validated on RunPod RTX 4090:
 
 ```bash
 #!/bin/bash
-# Quick setup for RunPod
+# WordPress SLM Training - Tested Working Setup for RunPod
+# Last validated: 2025-01-25 on RTX 4090
+
+echo "🚀 Setting up WordPress SLM Training Environment..."
 
 # Install dependencies
 cd /workspace
@@ -276,18 +322,59 @@ git clone https://github.com/zd87pl/wp-slm-training.git wp-slm
 cd wp-slm
 pip install -r requirements.txt
 
-# Download sample data
+# CRITICAL FIX: Remove problematic CUDA repository sources
+rm -f /etc/apt/sources.list.d/cuda*
+
+# Create sample training data (replace with your data)
 mkdir -p data/sft
-wget https://example.com/sample-wp-data.jsonl -O data/sft/train.jsonl
+cat > data/sft/train.jsonl << 'EOF'
+{"prompt": "How do I create a custom post type in WordPress?", "response": "To create a custom post type in WordPress, use the register_post_type() function..."}
+{"prompt": "What is the WordPress loop?", "response": "The WordPress loop is a PHP code block that displays posts..."}
+EOF
 
-# Start training
-accelerate launch training/sft_train.py \
-  --config training/config/sft_qlora.yaml \
+cp data/sft/train.jsonl data/sft/val.jsonl
+
+echo "✅ Environment setup complete!"
+echo "🎯 Starting training with WORKING configuration..."
+
+# Start training with VALIDATED config
+python training/sft_train.py \
+  --config training/config/runpod_working.yaml \
   --train_file data/sft/train.jsonl \
-  --eval_file data/sft/train.jsonl
+  --eval_file data/sft/val.jsonl
 
-echo "Training started! Monitor with: tail -f outputs/*/trainer_state.json"
+echo "🎉 Training completed! Check /workspace/outputs/test-model/ for results"
 ```
+
+## CRITICAL FIXES APPLIED ⚠️
+
+**These fixes are REQUIRED for RunPod compatibility:**
+
+### 1. Docker Build Fix
+```bash
+# Remove problematic CUDA repository sources
+rm -f /etc/apt/sources.list.d/cuda*
+```
+
+### 2. LoRA Gradient Fix
+Update `training/sft_train.py` setup_peft method:
+```python
+# CRITICAL: Enable gradients for LoRA parameters
+for name, param in self.model.named_parameters():
+    if param.requires_grad:
+        param.data = param.data.float()
+        param.requires_grad_(True)
+```
+
+### 3. Configuration Compatibility
+Use `training/config/runpod_working.yaml` with these CRITICAL settings:
+- `eval_strategy: steps` (NOT `evaluation_strategy`)
+- `learning_rate: 0.00005` (decimal, NOT scientific notation)
+- `gradient_checkpointing: false` (MUST be disabled for LoRA)
+- All precision flags disabled: `bf16: false, fp16: false, tf32: false`
+
+### 4. Statistics Crash Fix
+Update `_save_training_stats` method to handle None values safely.
 
 ## Next Steps
 

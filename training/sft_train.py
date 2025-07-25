@@ -265,9 +265,23 @@ class WPSFTTrainer:
         
     def _save_training_stats(self, trainer):
         """Save training statistics and metrics."""
+        # Extract stats safely from log history
+        final_train_loss = None
+        final_eval_loss = None
+        
+        if trainer.state.log_history:
+            # Look for the last entry with training loss
+            for entry in reversed(trainer.state.log_history):
+                if 'train_loss' in entry and final_train_loss is None:
+                    final_train_loss = entry['train_loss']
+                if 'eval_loss' in entry and final_eval_loss is None:
+                    final_eval_loss = entry['eval_loss']
+                if final_train_loss is not None and final_eval_loss is not None:
+                    break
+        
         stats = {
-            "final_train_loss": trainer.state.log_history[-1].get('train_loss', None),
-            "final_eval_loss": trainer.state.log_history[-1].get('eval_loss', None),
+            "final_train_loss": final_train_loss,
+            "final_eval_loss": final_eval_loss,
             "total_steps": trainer.state.global_step,
             "best_metric": trainer.state.best_metric,
             "best_model_checkpoint": trainer.state.best_model_checkpoint,
@@ -277,7 +291,20 @@ class WPSFTTrainer:
         stats_file.write_text(json.dumps(stats, indent=2))
         
         console.print(f"[green]Training stats saved to {stats_file}[/green]")
-        console.print(f"Final eval loss: {stats['final_eval_loss']:.4f}")
+        
+        # Display metrics safely
+        if final_train_loss is not None:
+            console.print(f"[cyan]Final training loss: {final_train_loss:.4f}[/cyan]")
+        else:
+            console.print("[yellow]No training loss recorded[/yellow]")
+            
+        if final_eval_loss is not None:
+            console.print(f"[cyan]Final evaluation loss: {final_eval_loss:.4f}[/cyan]")
+        else:
+            console.print("[yellow]No evaluation loss recorded (evaluation may not have run)[/yellow]")
+        
+        if trainer.state.best_metric is not None:
+            console.print(f"[cyan]Best metric: {trainer.state.best_metric:.4f}[/cyan]")
 
 
 def main():
