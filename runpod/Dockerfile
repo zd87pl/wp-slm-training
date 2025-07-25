@@ -8,20 +8,22 @@ ENV PYTHONUNBUFFERED=1 \
     CUDA_HOME=/usr/local/cuda \
     TORCH_CUDA_ARCH_LIST="6.0;6.1;7.0;7.5;8.0;8.6;8.9;9.0"
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install core system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     wget \
     curl \
     vim \
     tmux \
     htop \
-    nvtop \
     build-essential \
     libssl-dev \
     libffi-dev \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install nvtop separately with error handling (may fail on some systems)
+RUN apt-get update && apt-get install -y nvtop || echo "nvtop installation failed, continuing..."
 
 # Upgrade pip
 RUN pip install --upgrade pip setuptools wheel
