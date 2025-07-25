@@ -27,7 +27,7 @@ cd /workspace
 # Clone repository if not exists
 if [ ! -d "wp-slm" ]; then
     echo "📦 Cloning WordPress SLM repository..."
-    git clone https://github.com/your-repo/wp-slm.git
+    git clone https://github.com/zd87pl/wp-slm-training.git wp-slm
 fi
 
 cd wp-slm

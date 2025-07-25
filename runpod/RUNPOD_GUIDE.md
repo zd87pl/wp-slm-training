@@ -25,7 +25,7 @@ Best for: Development, debugging, and interactive training.
 
 2. **SSH into the pod and clone the repo:**
    ```bash
-   git clone https://github.com/your-repo/wp-slm.git
+   git clone https://github.com/zd87pl/wp-slm-training.git wp-slm
    cd wp-slm
    ```
 
@@ -272,7 +272,7 @@ Save as `runpod/quickstart.sh`:
 
 # Install dependencies
 cd /workspace
-git clone https://github.com/your-repo/wp-slm.git
+git clone https://github.com/zd87pl/wp-slm-training.git wp-slm
 cd wp-slm
 pip install -r requirements.txt
 

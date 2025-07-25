@@ -32,7 +32,7 @@ class RunPodDeployer:
             "minVcpuCount": 8,
             "startupScript": """#!/bin/bash
 cd /workspace
-git clone https://github.com/your-repo/wp-slm.git
+git clone https://github.com/zd87pl/wp-slm-training.git wp-slm
 cd wp-slm
 pip install -r requirements.txt
 pip install -e .
