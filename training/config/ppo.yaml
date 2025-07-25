@@ -1,0 +1,65 @@
+# PPO Configuration for WordPress SLM (Experimental)
+# Note: PPO is optional. Most users should use SFT + DPO instead.
+
+model_name_or_path: outputs/wp-sft-qlora  # Base policy model
+reward_model_path: null  # Set to path if using external reward model
+
+# PPO specific parameters
+ppo:
+  # Basic PPO settings
+  learning_rate: 1.41e-5
+  batch_size: 128
+  mini_batch_size: 4
+  gradient_accumulation_steps: 1
+  ppo_epochs: 4
+  
+  # PPO hyperparameters
+  gamma: 1.0              # Discount factor
+  lam: 0.95              # GAE lambda
+  cliprange: 0.2         # PPO clipping parameter
+  cliprange_value: 0.2   # Value function clipping
+  vf_coef: 0.1          # Value function coefficient
+  
+  # KL control
+  init_kl_coef: 0.2      # Initial KL penalty coefficient
+  target: 6              # Target KL divergence
+  horizon: 10000         # Horizon for KL controller
+  
+  # Generation parameters
+  max_length: 1024
+  temperature: 1.0
+  top_k: 0
+  top_p: 1.0
+  
+# Training settings
+training:
+  num_train_epochs: 1
+  save_freq: 100
+  eval_freq: 100
+  logging_steps: 10
+  
+  # Mixed precision
+  bf16: true
+  tf32: true
+  
+  # Seed
+  seed: 42
+  
+# Reward configuration
+reward:
+  use_intrinsic: false   # Use intrinsic rewards (requires AtlasTune)
+  use_external: true     # Use external reward model
+  
+  # Reward shaping weights
+  weights:
+    base_reward: 1.0
+    length_penalty: -0.1
+    security_bonus: 0.2
+    
+# Output directory
+output_dir: outputs/wp-ppo
+
+# Notes:
+# - PPO requires significant compute resources
+# - Consider using DPO instead for most use cases
+# - See TRL documentation for advanced PPO usage

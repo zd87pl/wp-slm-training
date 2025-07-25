@@ -1,0 +1,75 @@
+# DPO (Direct Preference Optimization) Configuration for WordPress SLM
+model_name_or_path: outputs/wp-sft-qlora  # Path to SFT model
+
+# DPO specific parameters
+dpo:
+  beta: 0.1                    # KL penalty coefficient
+  label_smoothing: 0.0         # Label smoothing for DPO loss
+  loss_type: "sigmoid"         # Options: sigmoid, hinge, ipo, kto_pair
+  use_weighting: false         # Whether to weight losses by score difference
+  reference_free: false        # Whether to use reference-free DPO
+
+# LoRA Configuration (if using PEFT)
+peft:
+  use_peft: true
+  lora_r: 8                    # Smaller r for DPO fine-tuning
+  lora_alpha: 16
+  lora_dropout: 0.05
+  target_modules:
+    - q_proj
+    - v_proj
+    - k_proj
+    - o_proj
+
+# Training Configuration
+training:
+  # Basic settings
+  num_train_epochs: 1
+  per_device_train_batch_size: 4     # Smaller batch for preference pairs
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 4     # Effective batch size: 16
+  gradient_checkpointing: true
+  
+  # Learning rate (smaller for DPO)
+  learning_rate: 5e-6
+  lr_scheduler_type: "linear"
+  warmup_ratio: 0.1
+  
+  # Optimizer
+  optim: "paged_adamw_32bit"
+  weight_decay: 0.01
+  max_grad_norm: 0.5
+  
+  # Sequence length
+  max_seq_length: 1536
+  max_prompt_length: 512     # Maximum length for prompt
+  
+  # Logging and saving
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 200
+  save_strategy: "steps"
+  evaluation_strategy: "steps"
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  
+  # Mixed precision
+  bf16: true
+  tf32: true
+  
+  # Misc
+  seed: 42
+  report_to: ["tensorboard"]
+  remove_unused_columns: false
+  
+# Output directory
+output_dir: outputs/wp-dpo
+
+# Prompt format for DPO
+prompt_template: |
+  You are a helpful WordPress expert assistant. Answer the following question accurately and provide code examples when relevant.
+  
+  USER: {prompt}
+  ASSISTANT:

@@ -1,0 +1,77 @@
+# QLoRA SFT Configuration for WordPress SLM
+base_model: meta-llama/Llama-2-7b-hf
+
+# LoRA Configuration
+lora:
+  r: 16                    # LoRA rank
+  alpha: 32                # LoRA alpha
+  dropout: 0.05            # LoRA dropout
+  target_modules:          # Which modules to apply LoRA to
+    - q_proj
+    - v_proj
+    - k_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+# Quantization Configuration
+quantization:
+  load_in_4bit: true
+  bnb_4bit_compute_dtype: bfloat16
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_quant_type: "nf4"
+
+# Training Configuration
+training:
+  # Basic settings
+  num_train_epochs: 1
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 2
+  gradient_checkpointing: true
+  
+  # Learning rate
+  learning_rate: 2e-5
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  
+  # Optimizer
+  optim: "paged_adamw_32bit"
+  weight_decay: 0.01
+  max_grad_norm: 0.3
+  
+  # Sequence length
+  max_seq_length: 1536
+  
+  # Logging and saving
+  logging_steps: 10
+  eval_steps: 200
+  save_steps: 500
+  save_strategy: "steps"
+  evaluation_strategy: "steps"
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  
+  # Mixed precision
+  bf16: true
+  tf32: true
+  
+  # Misc
+  seed: 42
+  report_to: ["tensorboard"]
+  push_to_hub: false
+  
+# Output directory
+output_dir: outputs/wp-sft-qlora
+
+# Prompt template
+prompt_template: |
+  You are a helpful WordPress expert assistant. Answer the following question accurately and provide code examples when relevant.
+  
+  USER: {prompt}
+  ASSISTANT: {response}

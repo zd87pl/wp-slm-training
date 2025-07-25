@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: wp-slm-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      MYSQL_ROOT_PASSWORD: rootpassword
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - wp-slm-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # WordPress
+  wordpress:
+    depends_on:
+      db:
+        condition: service_healthy
+    image: wordpress:latest
+    container_name: wp-slm-wordpress
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: 1
+      WORDPRESS_DEBUG_LOG: 1
+      WORDPRESS_DEBUG_DISPLAY: 0
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wp-plugin:/var/www/html/wp-content/plugins/wp-slm-assistant
+    networks:
+      - wp-slm-network
+
+  # PHPMyAdmin (optional, for database management)
+  phpmyadmin:
+    depends_on:
+      - db
+    image: phpmyadmin/phpmyadmin
+    container_name: wp-slm-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+    networks:
+      - wp-slm-network
+
+  # WP-CLI container for running commands
+  wp-cli:
+    depends_on:
+      - wordpress
+    image: wordpress:cli
+    container_name: wp-slm-cli
+    user: "33:33"  # www-data user
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wp-plugin:/var/www/html/wp-content/plugins/wp-slm-assistant
+    networks:
+      - wp-slm-network
+    entrypoint: ["wp", "--allow-root"]
+    command: ["--info"]
+
+volumes:
+  db_data:
+    driver: local
+  wordpress_data:
+    driver: local
+
+networks:
+  wp-slm-network:
+    driver: bridge
