@@ -8,8 +8,11 @@ ENV PYTHONUNBUFFERED=1 \
     CUDA_HOME=/usr/local/cuda \
     TORCH_CUDA_ARCH_LIST="6.0;6.1;7.0;7.5;8.0;8.6;8.9;9.0"
 
-# Install system dependencies
-RUN apt-get update && \
+# Remove problematic NVIDIA CUDA repository and install system dependencies
+RUN rm -f /etc/apt/sources.list.d/cuda* && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         git \
         wget \
