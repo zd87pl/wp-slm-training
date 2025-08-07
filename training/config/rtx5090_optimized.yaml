@@ -2,7 +2,7 @@
 # Optimized for 32GB VRAM, targeting >98% improvement over base model
 # Last updated: 2025-01-07
 
-base_model: microsoft/DialoGPT-medium
+base_model: meta-llama/Llama-2-7b-hf
 output_dir: ./models/wp-slm-rtx5090
 
 # LoRA Configuration - Higher rank due to abundant VRAM
@@ -10,7 +10,7 @@ lora:
   r: 64                    # Higher rank for RTX 5090 (vs 8-16 for smaller GPUs)
   alpha: 128               # Higher alpha for better adaptation
   dropout: 0.1             # Slightly higher dropout for regularization
-  target_modules:          # Comprehensive module targeting
+  target_modules:          # Llama-2 compatible module names
     - q_proj
     - v_proj
     - k_proj
