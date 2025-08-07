@@ -104,8 +104,12 @@ generate_plugin_samples() {
                 break
             fi
             
-            # Generate sample data using simple echo to avoid parsing issues
-            echo "{\"instruction\": \"How do I implement ${topic} in a WordPress plugin?\", \"input\": \"\", \"output\": \"To implement ${topic} in WordPress, you need to understand the core WordPress APIs and follow best practices. Create a proper plugin structure with main plugin file, organized directories, and proper documentation. Use WordPress hooks, filters, and APIs appropriately. Follow coding standards and security guidelines. Implement proper error handling, validation, sanitization, and escaping. Use nonces for security. Test thoroughly across different WordPress versions and themes. This approach ensures compatibility, security, and maintainability.\"}" >> "$output_file"
+            # Generate sample data with simple JSON
+            local safe_topic="${topic//[ -]/_}"
+            local safe_topic_upper="${safe_topic^^}"
+            
+            # Create a simpler JSON structure avoiding complex escaping
+            echo "{\"instruction\": \"How do I implement $topic in a WordPress plugin?\", \"input\": \"\", \"output\": \"To implement $topic in WordPress, you need to understand the core WordPress APIs and follow best practices. Here's a comprehensive guide: 1. Setup and Structure: Create a proper plugin structure with main plugin file, organized directories, and proper documentation. 2. Core Implementation: Use WordPress hooks, filters, and APIs appropriately. Follow coding standards and security guidelines. 3. Best Practices: Implement proper error handling, validation, sanitization, and escaping. Use nonces for security. 4. Testing: Test thoroughly across different WordPress versions and themes. Consider edge cases and user scenarios. 5. Documentation: Provide clear documentation and examples for other developers. This approach ensures compatibility, security, and maintainability.\"}" >> "$output_file"
             
             count=$((count + 1))
             show_progress $count $PLUGIN_DEV_SAMPLES "Plugin Development"
@@ -153,7 +157,11 @@ generate_theme_samples() {
                 break
             fi
             
-            echo "{\"instruction\": \"Explain how to implement ${topic} in WordPress theme development\", \"input\": \"\", \"output\": \"Implementing ${topic} requires understanding WordPress theme architecture and following modern development practices. Organize theme files properly with functions.php, style.css, and template files. Use theme support features, enqueue scripts and styles properly. Leverage WordPress template hierarchy and custom templates. Implement mobile-first approach with proper breakpoints. Optimize images, minify assets, use proper caching. This ensures cross-browser compatibility, accessibility, and optimal performance.\"}" >> "$output_file"
+            local safe_topic="${topic//[ -]/_}"
+            local safe_topic_lower="${safe_topic,,}"
+            
+            # Simple JSON structure
+            echo "{\"instruction\": \"Explain how to implement $topic in WordPress theme development\", \"input\": \"\", \"output\": \"Implementing $topic requires understanding WordPress theme architecture and following modern development practices. Technical Approach: 1. File Structure: Organize theme files properly with functions.php, style.css, and template files. 2. WordPress APIs: Use theme support features, enqueue scripts/styles properly. 3. Template System: Leverage WordPress template hierarchy and custom templates. 4. Responsive Design: Implement mobile-first approach with proper breakpoints. 5. Performance: Optimize images, minify assets, use proper caching. This ensures cross-browser compatibility, accessibility, and optimal performance.\"}" >> "$output_file"
             
             count=$((count + 1))
             show_progress $count $THEME_DEV_SAMPLES "Theme Development"
