@@ -593,7 +593,7 @@ class WPSFTTrainer:
             output_dir = Path(self.config['output_dir'])
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            trainer.save_model()
+            trainer.save_model(self.config['output_dir'])
             
             # Verify model was actually saved - check for various model file patterns
             model_patterns = [
