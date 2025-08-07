@@ -190,35 +190,64 @@ class WPSFTTrainer:
         """Set up training arguments."""
         training_config = self.config['training']
         
-        return TrainingArguments(
-            output_dir=self.config['output_dir'],
-            num_train_epochs=training_config['num_train_epochs'],
-            per_device_train_batch_size=training_config['per_device_train_batch_size'],
-            per_device_eval_batch_size=training_config['per_device_eval_batch_size'],
-            gradient_accumulation_steps=training_config['gradient_accumulation_steps'],
-            gradient_checkpointing=training_config.get('gradient_checkpointing', True),
-            learning_rate=training_config['learning_rate'],
-            lr_scheduler_type=training_config['lr_scheduler_type'],
-            warmup_ratio=training_config['warmup_ratio'],
-            optim=training_config['optim'],
-            weight_decay=training_config['weight_decay'],
-            max_grad_norm=training_config['max_grad_norm'],
-            logging_steps=training_config['logging_steps'],
-            eval_steps=training_config['eval_steps'],
-            save_steps=training_config['save_steps'],
-            save_strategy=training_config['save_strategy'],
-            eval_strategy=training_config.get('evaluation_strategy', training_config.get('eval_strategy', 'steps')),
-            save_total_limit=training_config['save_total_limit'],
-            load_best_model_at_end=training_config['load_best_model_at_end'],
-            metric_for_best_model=training_config['metric_for_best_model'],
-            greater_is_better=training_config['greater_is_better'],
-            bf16=training_config.get('bf16', False),
-            tf32=training_config.get('tf32', True),
-            seed=training_config['seed'],
-            report_to=training_config.get('report_to', ['tensorboard']),
-            push_to_hub=training_config.get('push_to_hub', False),
-            remove_unused_columns=False,
-        )
+        # Build arguments dynamically to handle version differences
+        args = {
+            'output_dir': self.config['output_dir'],
+            'num_train_epochs': training_config['num_train_epochs'],
+            'per_device_train_batch_size': training_config['per_device_train_batch_size'],
+            'per_device_eval_batch_size': training_config['per_device_eval_batch_size'],
+            'gradient_accumulation_steps': training_config['gradient_accumulation_steps'],
+            'gradient_checkpointing': training_config.get('gradient_checkpointing', True),
+            'learning_rate': training_config['learning_rate'],
+            'lr_scheduler_type': training_config['lr_scheduler_type'],
+            'warmup_ratio': training_config['warmup_ratio'],
+            'optim': training_config['optim'],
+            'weight_decay': training_config['weight_decay'],
+            'max_grad_norm': training_config['max_grad_norm'],
+            'logging_steps': training_config['logging_steps'],
+            'save_steps': training_config['save_steps'],
+            'save_strategy': training_config['save_strategy'],
+            'save_total_limit': training_config['save_total_limit'],
+            'load_best_model_at_end': training_config['load_best_model_at_end'],
+            'metric_for_best_model': training_config['metric_for_best_model'],
+            'greater_is_better': training_config['greater_is_better'],
+            'seed': training_config['seed'],
+            'push_to_hub': training_config.get('push_to_hub', False),
+            'remove_unused_columns': False,
+        }
+        
+        # Handle evaluation strategy with version compatibility
+        eval_strategy_value = training_config.get('eval_strategy', 'steps')
+        try:
+            # Try the newer parameter name first
+            args['eval_strategy'] = eval_strategy_value
+        except:
+            try:
+                # Fall back to older parameter name
+                args['evaluation_strategy'] = eval_strategy_value
+            except:
+                # Skip evaluation strategy if neither works
+                console.print("[yellow]Warning: Could not set evaluation strategy[/yellow]")
+        
+        # Add eval_steps only if we have evaluation
+        if 'eval_strategy' in args or 'evaluation_strategy' in args:
+            args['eval_steps'] = training_config['eval_steps']
+        
+        # Handle precision settings
+        if training_config.get('bf16', False):
+            args['bf16'] = True
+        else:
+            args['fp16'] = training_config.get('fp16', True)
+            
+        if training_config.get('tf32', True):
+            args['tf32'] = True
+            
+        # Handle reporting
+        report_to = training_config.get('report_to', ['tensorboard'])
+        if report_to:
+            args['report_to'] = report_to
+            
+        return TrainingArguments(**args)
         
     def train(self, train_file: str, eval_file: str, resume_from_checkpoint: Optional[str] = None):
         """Run the training process."""
