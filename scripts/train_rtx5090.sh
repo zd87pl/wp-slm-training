@@ -151,13 +151,21 @@ create_training_command() {
 validate_training() {
     log "${YELLOW}🔍 Validating training output...${NC}"
     
-    # Check if model files exist
+    # Check if PEFT/LoRA adapter files exist
     if [ -d "$MODEL_OUTPUT_DIR" ]; then
-        MODEL_FILES=$(find "$MODEL_OUTPUT_DIR" -name "*.bin" -o -name "*.safetensors" | wc -l)
-        if [ "$MODEL_FILES" -gt 0 ]; then
-            log "${GREEN}✅ Model files created: $MODEL_FILES files${NC}"
+        # Look for PEFT-specific files
+        ADAPTER_CONFIG="$MODEL_OUTPUT_DIR/adapter_config.json"
+        ADAPTER_MODEL="$MODEL_OUTPUT_DIR/adapter_model.safetensors"
+        
+        if [ -f "$ADAPTER_CONFIG" ] && [ -f "$ADAPTER_MODEL" ]; then
+            MODEL_SIZE=$(du -sh "$ADAPTER_MODEL" | cut -f1)
+            log "${GREEN}✅ PEFT adapter model created successfully${NC}"
+            log "  - adapter_config.json: $(stat -f%z "$ADAPTER_CONFIG" 2>/dev/null || stat -c%s "$ADAPTER_CONFIG" 2>/dev/null) bytes"
+            log "  - adapter_model.safetensors: $MODEL_SIZE"
         else
-            log "${RED}❌ No model files found${NC}"
+            log "${RED}❌ PEFT adapter files not found${NC}"
+            log "  Expected: $ADAPTER_CONFIG"
+            log "  Expected: $ADAPTER_MODEL"
             return 1
         fi
     else
@@ -206,12 +214,14 @@ generate_report() {
         echo "- Sequence length: 2048"
         echo ""
         
-        if [ -f "$MODEL_OUTPUT_DIR/pytorch_model.bin" ] || [ -f "$MODEL_OUTPUT_DIR/model.safetensors" ]; then
-            echo "✅ Training completed successfully"
-            MODEL_SIZE=$(du -sh "$MODEL_OUTPUT_DIR" | cut -f1)
-            echo "Model size: $MODEL_SIZE"
+        # Check for PEFT adapter files specifically
+        if [ -f "$MODEL_OUTPUT_DIR/adapter_model.safetensors" ] && [ -f "$MODEL_OUTPUT_DIR/adapter_config.json" ]; then
+            echo "✅ PEFT Training completed successfully"
+            MODEL_SIZE=$(du -sh "$MODEL_OUTPUT_DIR/adapter_model.safetensors" | cut -f1)
+            echo "Adapter model size: $MODEL_SIZE"
+            echo "Training method: LoRA/PEFT (Parameter Efficient Fine-Tuning)"
         else
-            echo "❌ Training may have failed - no model files found"
+            echo "❌ PEFT adapter files not found"
         fi
         
     } > "$REPORT_FILE"

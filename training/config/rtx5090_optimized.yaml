@@ -34,8 +34,8 @@ quantization:
 
 # Training Configuration - RTX 5090 Optimized
 training:
-  # Basic settings - Aggressive for RTX 5090
-  num_train_epochs: 3
+  # Basic settings - Optimized for WordPress domain expertise
+  num_train_epochs: 10
   per_device_train_batch_size: 16    # Large batch size for 32GB VRAM
   per_device_eval_batch_size: 16
   gradient_accumulation_steps: 4     # High accumulation for effective batch size 64
@@ -54,16 +54,18 @@ training:
   # Sequence length - Longer sequences for RTX 5090
   max_seq_length: 2048               # Longer sequences with abundant VRAM
   
-  # Logging and saving
-  logging_steps: 10
-  eval_steps: 100                    # More frequent evaluation
-  save_steps: 200                    # Frequent checkpoints
+  # Logging and saving - Early stopping protection
+  logging_steps: 5
+  eval_steps: 50                     # Frequent evaluation to catch overfitting
+  save_steps: 100                    # Frequent checkpoints for early stopping
   save_strategy: "steps"
-  eval_strategy: "steps"             # Fixed from evaluation_strategy
-  save_total_limit: 5                # More checkpoints due to larger storage
+  eval_strategy: "steps"
+  save_total_limit: 10               # More checkpoints to find best model
   load_best_model_at_end: true
   metric_for_best_model: "eval_loss"
   greater_is_better: false
+  early_stopping_patience: 3         # Stop if eval loss doesn't improve for 3 evaluations
+  early_stopping_threshold: 0.01     # Minimum improvement threshold
   
   # Mixed precision - RTX 5090 optimized
   bf16: false                        # Use fp16 for RTX 5090 compatibility
