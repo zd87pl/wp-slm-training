@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
 
+# Disable TensorBoard integration at environment level to prevent callback registration
+os.environ['DISABLE_MLFLOW_INTEGRATION'] = 'TRUE'
+os.environ['WANDB_DISABLED'] = 'true'
+# Force disable TensorBoard by setting an invalid path
+os.environ['TENSORBOARD_LOG_DIR'] = '/tmp/disabled_tensorboard'
+
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -20,6 +26,8 @@ from transformers import (
     BitsAndBytesConfig,
     HfArgumentParser
 )
+# Import callback handler to manually control callbacks
+from transformers.integrations import is_tensorboard_available
 from peft import (
     LoraConfig,
     get_peft_model,
@@ -294,10 +302,9 @@ class WPSFTTrainer:
         if training_config.get('tf32', True):
             args['tf32'] = True
             
-        # Handle reporting
-        report_to = training_config.get('report_to', ['tensorboard'])
-        if report_to:
-            args['report_to'] = report_to
+        # Force disable all reporting to avoid dependency issues (TensorBoard, wandb, etc)
+        # This overrides any config setting to ensure compatibility
+        args['report_to'] = []
             
         return TrainingArguments(**args)
         
@@ -354,6 +361,16 @@ class WPSFTTrainer:
                 pad_to_multiple_of=8
             )
         
+        # Monkey patch to prevent TensorBoard callback registration
+        original_is_tensorboard_available = None
+        try:
+            import transformers.integrations
+            original_is_tensorboard_available = transformers.integrations.is_tensorboard_available
+            # Force TensorBoard to appear unavailable
+            transformers.integrations.is_tensorboard_available = lambda: False
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not disable TensorBoard integration: {e}[/yellow]")
+
         # Initialize trainer with maximum version compatibility
         base_kwargs = {
             'model': self.model,
@@ -397,6 +414,13 @@ class WPSFTTrainer:
         
         if trainer is None:
             raise RuntimeError("Could not initialize SFTTrainer with any parameter combination")
+        
+        # Restore original TensorBoard availability function
+        try:
+            if original_is_tensorboard_available is not None:
+                transformers.integrations.is_tensorboard_available = original_is_tensorboard_available
+        except Exception:
+            pass  # Ignore restoration errors
         
         # Start training
         console.print("[bold green]Starting training...[/bold green]")
