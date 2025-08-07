@@ -300,18 +300,26 @@ class WPSFTTrainer:
                 pad_to_multiple_of=8
             )
         
-        # Initialize trainer
-        trainer = SFTTrainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=self.train_dataset,
-            eval_dataset=self.eval_dataset,
-            tokenizer=self.tokenizer,
-            formatting_func=self.formatting_func,
-            data_collator=data_collator,
-            max_seq_length=self.config['training']['max_seq_length'],
-            packing=False,  # Disable packing for WordPress domain
-        )
+        # Initialize trainer with version compatibility
+        trainer_kwargs = {
+            'model': self.model,
+            'args': training_args,
+            'train_dataset': self.train_dataset,
+            'eval_dataset': self.eval_dataset,
+            'formatting_func': self.formatting_func,
+            'data_collator': data_collator,
+            'max_seq_length': self.config['training']['max_seq_length'],
+            'packing': False,  # Disable packing for WordPress domain
+        }
+        
+        # Try to add tokenizer - some TRL versions don't accept it
+        try:
+            trainer = SFTTrainer(tokenizer=self.tokenizer, **trainer_kwargs)
+            console.print("[green]SFTTrainer initialized with tokenizer parameter[/green]")
+        except TypeError:
+            # Fallback for TRL versions that don't accept tokenizer parameter
+            console.print("[yellow]SFTTrainer doesn't accept tokenizer parameter, using fallback[/yellow]")
+            trainer = SFTTrainer(**trainer_kwargs)
         
         # Start training
         console.print("[bold green]Starting training...[/bold green]")
