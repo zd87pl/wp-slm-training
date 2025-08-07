@@ -159,7 +159,7 @@ class WPSFTTrainer:
         
         # Load datasets
         self.train_dataset = load_dataset(
-            'json', 
+            'json',
             data_files=train_file,
             split='train'
         )
@@ -172,6 +172,60 @@ class WPSFTTrainer:
         
         console.print(f"[green]Loaded {len(self.train_dataset)} training examples[/green]")
         console.print(f"[green]Loaded {len(self.eval_dataset)} evaluation examples[/green]")
+        
+    def preprocess_datasets(self):
+        """Preprocess datasets with proper tokenization and formatting."""
+        console.print("[yellow]Preprocessing datasets...[/yellow]")
+        
+        def tokenize_function(examples):
+            """Tokenize and format examples for training."""
+            # Apply formatting function to get text
+            if isinstance(examples, dict) and len(examples) > 0:
+                # Handle batch processing
+                first_key = next(iter(examples.keys()))
+                batch_size = len(examples[first_key])
+                
+                texts = []
+                for i in range(batch_size):
+                    example = {key: examples[key][i] for key in examples.keys()}
+                    text = self.formatting_func(example)
+                    texts.append(text)
+            else:
+                # Handle single example
+                texts = [self.formatting_func(examples)]
+            
+            # Tokenize the texts
+            tokenized = self.tokenizer(
+                texts,
+                truncation=True,
+                padding=False,  # We'll pad in the data collator
+                max_length=self.config['training']['max_seq_length'],
+                return_tensors=None  # Return as lists, not tensors
+            )
+            
+            # For causal language modeling, labels are the same as input_ids
+            tokenized["labels"] = tokenized["input_ids"].copy()
+            
+            return tokenized
+        
+        # Apply tokenization
+        console.print("[yellow]Applying tokenization to train dataset...[/yellow]")
+        self.train_dataset = self.train_dataset.map(
+            tokenize_function,
+            batched=True,
+            remove_columns=self.train_dataset.column_names,
+            desc="Tokenizing train dataset"
+        )
+        
+        console.print("[yellow]Applying tokenization to eval dataset...[/yellow]")
+        self.eval_dataset = self.eval_dataset.map(
+            tokenize_function,
+            batched=True,
+            remove_columns=self.eval_dataset.column_names,
+            desc="Tokenizing eval dataset"
+        )
+        
+        console.print("[green]Dataset preprocessing completed[/green]")
         
     def formatting_func(self, example):
         """Format training examples for SFT training with robust key handling"""
@@ -319,6 +373,9 @@ class WPSFTTrainer:
         # Load datasets
         self.load_datasets(train_file, eval_file)
         
+        # Preprocess datasets with proper tokenization
+        self.preprocess_datasets()
+        
         # Set up training arguments
         training_args = self.setup_training_args()
         
@@ -379,26 +436,17 @@ class WPSFTTrainer:
             'eval_dataset': self.eval_dataset,
         }
         
-        # Optional parameters that may not be supported in all TRL versions
+        # Since we've preprocessed the data, we don't need formatting_func, tokenizer, or max_seq_length
+        # These would conflict with our preprocessed tokenized data
         optional_kwargs = {
-            'tokenizer': self.tokenizer,
-            'formatting_func': self.formatting_func,
             'data_collator': data_collator,
-            'max_seq_length': self.config['training']['max_seq_length'],
         }
         
-        # Try different combinations of parameters for maximum compatibility
-        # Note: Removed 'packing' parameter as it's not supported in many TRL versions
+        # Try different combinations of parameters for preprocessed data compatibility
         attempts = [
-            # Try all parameters
+            # Try with data collator
             {**base_kwargs, **optional_kwargs},
-            # Without tokenizer
-            {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k != 'tokenizer'}},
-            # Without tokenizer and max_seq_length
-            {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k not in ['tokenizer', 'max_seq_length']}},
-            # Without tokenizer and formatting_func (use default)
-            {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k not in ['tokenizer', 'formatting_func']}},
-            # Minimal parameters only
+            # Minimal parameters only (no data collator)
             base_kwargs
         ]
         
