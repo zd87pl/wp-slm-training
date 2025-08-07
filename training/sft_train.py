@@ -300,26 +300,49 @@ class WPSFTTrainer:
                 pad_to_multiple_of=8
             )
         
-        # Initialize trainer with version compatibility
-        trainer_kwargs = {
+        # Initialize trainer with maximum version compatibility
+        base_kwargs = {
             'model': self.model,
             'args': training_args,
             'train_dataset': self.train_dataset,
             'eval_dataset': self.eval_dataset,
+        }
+        
+        # Optional parameters that may not be supported in all TRL versions
+        optional_kwargs = {
+            'tokenizer': self.tokenizer,
             'formatting_func': self.formatting_func,
             'data_collator': data_collator,
             'max_seq_length': self.config['training']['max_seq_length'],
-            'packing': False,  # Disable packing for WordPress domain
+            'packing': False,
         }
         
-        # Try to add tokenizer - some TRL versions don't accept it
-        try:
-            trainer = SFTTrainer(tokenizer=self.tokenizer, **trainer_kwargs)
-            console.print("[green]SFTTrainer initialized with tokenizer parameter[/green]")
-        except TypeError:
-            # Fallback for TRL versions that don't accept tokenizer parameter
-            console.print("[yellow]SFTTrainer doesn't accept tokenizer parameter, using fallback[/yellow]")
-            trainer = SFTTrainer(**trainer_kwargs)
+        # Try different combinations of parameters for maximum compatibility
+        attempts = [
+            # Try all parameters
+            {**base_kwargs, **optional_kwargs},
+            # Without tokenizer
+            {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k != 'tokenizer'}},
+            # Without tokenizer and max_seq_length
+            {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k not in ['tokenizer', 'max_seq_length']}},
+            # Without tokenizer, max_seq_length, and packing
+            {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k not in ['tokenizer', 'max_seq_length', 'packing']}},
+            # Minimal parameters only
+            base_kwargs
+        ]
+        
+        trainer = None
+        for i, kwargs in enumerate(attempts):
+            try:
+                trainer = SFTTrainer(**kwargs)
+                console.print(f"[green]SFTTrainer initialized successfully (attempt {i+1})[/green]")
+                break
+            except TypeError as e:
+                console.print(f"[yellow]SFTTrainer attempt {i+1} failed: {e}[/yellow]")
+                continue
+        
+        if trainer is None:
+            raise RuntimeError("Could not initialize SFTTrainer with any parameter combination")
         
         # Start training
         console.print("[bold green]Starting training...[/bold green]")
