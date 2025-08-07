@@ -593,7 +593,19 @@ class WPSFTTrainer:
             output_dir = Path(self.config['output_dir'])
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            trainer.save_model(self.config['output_dir'])
+            # Save model with explicit PEFT handling
+            if hasattr(self.model, 'save_pretrained'):
+                # For PEFT models, save the adapter
+                console.print("[yellow]Saving PEFT adapter model...[/yellow]")
+                self.model.save_pretrained(self.config['output_dir'])
+                
+                # Also save the trainer state
+                console.print("[yellow]Saving trainer state...[/yellow]")
+                trainer.save_state()
+            else:
+                # For standard models
+                console.print("[yellow]Saving standard model...[/yellow]")
+                trainer.save_model(self.config['output_dir'])
             
             # Verify model was actually saved - check for various model file patterns
             model_patterns = [
