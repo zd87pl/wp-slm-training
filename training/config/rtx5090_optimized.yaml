@@ -2,7 +2,7 @@
 # Optimized for 32GB VRAM, targeting >98% improvement over base model
 # Last updated: 2025-01-07
 
-base_model: meta-llama/Llama-2-7b-hf
+base_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
 output_dir: ./models/wp-slm-rtx5090
 
 # LoRA Configuration - Higher rank due to abundant VRAM
