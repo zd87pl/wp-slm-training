@@ -207,7 +207,7 @@ class WPSFTTrainer:
             eval_steps=training_config['eval_steps'],
             save_steps=training_config['save_steps'],
             save_strategy=training_config['save_strategy'],
-            evaluation_strategy=training_config.get('evaluation_strategy', training_config.get('eval_strategy', 'steps')),
+            eval_strategy=training_config.get('evaluation_strategy', training_config.get('eval_strategy', 'steps')),
             save_total_limit=training_config['save_total_limit'],
             load_best_model_at_end=training_config['load_best_model_at_end'],
             metric_for_best_model=training_config['metric_for_best_model'],
