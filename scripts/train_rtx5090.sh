@@ -138,27 +138,11 @@ create_training_command() {
     TRAIN_FILE="data/sft/wp_enhanced_25k_train.jsonl"
     EVAL_FILE="data/sft/wp_enhanced_25k_eval.jsonl"
     
+    # Only pass core arguments - configuration is handled by YAML file
     TRAINING_CMD="python3 training/sft_train.py"
     TRAINING_CMD+=" --config $CONFIG_FILE"
     TRAINING_CMD+=" --train_file $TRAIN_FILE"
     TRAINING_CMD+=" --eval_file $EVAL_FILE"
-    TRAINING_CMD+=" --output_dir $MODEL_OUTPUT_DIR"
-    TRAINING_CMD+=" --logging_dir $LOG_DIR"
-    TRAINING_CMD+=" --report_to tensorboard"
-    TRAINING_CMD+=" --run_name wp-slm-rtx5090-$TIMESTAMP"
-    
-    # RTX 5090 specific flags
-    TRAINING_CMD+=" --bf16 false"  # Use fp16 for RTX 5090
-    TRAINING_CMD+=" --fp16 true"
-    TRAINING_CMD+=" --tf32 true"
-    TRAINING_CMD+=" --dataloader_pin_memory true"
-    TRAINING_CMD+=" --dataloader_num_workers 12"
-    TRAINING_CMD+=" --gradient_checkpointing true"
-    
-    # Memory optimization
-    TRAINING_CMD+=" --max_grad_norm 1.0"
-    TRAINING_CMD+=" --group_by_length true"
-    TRAINING_CMD+=" --length_column_name length"
     
     echo "$TRAINING_CMD"
 }
