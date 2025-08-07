@@ -523,34 +523,127 @@ class WPSFTTrainer:
             pass  # Ignore restoration errors
         
         try:
-            # Start training
+            # Start training with enhanced monitoring
             console.print("[bold green]Step 7: Starting training...[/bold green]")
-            trainer.train(resume_from_checkpoint=resume_from_checkpoint)
-            console.print("[green]✓ Training completed successfully[/green]")
+            console.print("[yellow]Training configuration:[/yellow]")
+            console.print(f"[yellow]  - Epochs: {self.config['training']['num_train_epochs']}[/yellow]")
+            console.print(f"[yellow]  - Train batch size: {self.config['training']['per_device_train_batch_size']}[/yellow]")
+            console.print(f"[yellow]  - Gradient accumulation: {self.config['training']['gradient_accumulation_steps']}[/yellow]")
+            console.print(f"[yellow]  - Learning rate: {self.config['training']['learning_rate']}[/yellow]")
+            console.print(f"[yellow]  - Max sequence length: {self.config['training']['max_seq_length']}[/yellow]")
+            console.print(f"[yellow]  - Output directory: {self.config['output_dir']}[/yellow]")
             
-            # Save final model
-            console.print("[bold blue]Step 8: Saving final model...[/bold blue]")
-            trainer.save_model()
-            console.print("[green]✓ Model saved[/green]")
+            # Check GPU memory before training
+            if torch.cuda.is_available():
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)  # GB
+                console.print(f"[yellow]  - GPU Memory Total: {gpu_memory:.1f} GB[/yellow]")
+                torch.cuda.empty_cache()  # Clear cache before training
+                
+            # Start the actual training with detailed error capture
+            console.print("[yellow]Initiating training loop...[/yellow]")
+            training_result = trainer.train(resume_from_checkpoint=resume_from_checkpoint)
             
-            # Save tokenizer
-            console.print("[bold blue]Step 9: Saving tokenizer...[/bold blue]")
-            self.tokenizer.save_pretrained(self.config['output_dir'])
-            console.print("[green]✓ Tokenizer saved[/green]")
+            console.print("[green]✓ Training loop completed successfully[/green]")
+            console.print(f"[cyan]Training result: {training_result}[/cyan]")
             
-            # Save training stats
-            console.print("[bold blue]Step 10: Saving training stats...[/bold blue]")
-            self._save_training_stats(trainer)
-            console.print("[green]✓ Training stats saved[/green]")
+            # Verify training actually happened by checking global step
+            if trainer.state.global_step == 0:
+                raise RuntimeError("Training completed but no steps were executed (global_step=0)")
+            else:
+                console.print(f"[green]✓ Training executed {trainer.state.global_step} steps[/green]")
             
-            console.print("[bold green]🎉 Training pipeline completed successfully![/bold green]")
-            
-        except Exception as e:
-            console.print(f"[red]❌ Training failed during execution: {e}[/red]")
+        except torch.cuda.OutOfMemoryError as e:
+            console.print("[red]❌ GPU Out of Memory Error during training[/red]")
+            console.print(f"[yellow]CUDA OOM: {e}[/yellow]")
+            console.print("[yellow]Suggestions:[/yellow]")
+            console.print("[yellow]  1. Reduce per_device_train_batch_size[/yellow]")
+            console.print("[yellow]  2. Increase gradient_accumulation_steps[/yellow]")
+            console.print("[yellow]  3. Reduce max_seq_length[/yellow]")
+            console.print("[yellow]  4. Enable gradient_checkpointing[/yellow]")
+            raise
+        except RuntimeError as e:
+            console.print(f"[red]❌ Runtime error during training: {e}[/red]")
             console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
+            # Check for common runtime errors
+            if "CUDA" in str(e):
+                console.print("[yellow]This appears to be a CUDA-related error[/yellow]")
+            elif "memory" in str(e).lower():
+                console.print("[yellow]This appears to be a memory-related error[/yellow]")
             import traceback
             console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
             raise
+        except Exception as e:
+            console.print(f"[red]❌ Unexpected error during training: {e}[/red]")
+            console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
+            console.print(f"[yellow]Error details: {str(e)}[/yellow]")
+            import traceback
+            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            raise
+        
+        try:
+            # Save final model with verification
+            console.print("[bold blue]Step 8: Saving final model...[/bold blue]")
+            
+            # Ensure output directory exists
+            output_dir = Path(self.config['output_dir'])
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            trainer.save_model()
+            
+            # Verify model was actually saved
+            model_files = list(output_dir.glob("*.bin")) + list(output_dir.glob("*.safetensors")) + list(output_dir.glob("adapter_*.json"))
+            if model_files:
+                console.print(f"[green]✓ Model saved ({len(model_files)} files)[/green]")
+                for f in model_files[:3]:  # Show first 3 files
+                    console.print(f"[cyan]  - {f.name}[/cyan]")
+            else:
+                raise RuntimeError(f"Model saving failed - no model files found in {output_dir}")
+                
+        except Exception as e:
+            console.print(f"[red]❌ Model saving failed: {e}[/red]")
+            import traceback
+            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            raise
+            
+        try:
+            # Save tokenizer with verification
+            console.print("[bold blue]Step 9: Saving tokenizer...[/bold blue]")
+            self.tokenizer.save_pretrained(self.config['output_dir'])
+            
+            # Verify tokenizer was saved
+            tokenizer_files = list(output_dir.glob("tokenizer*")) + list(output_dir.glob("special_tokens_map.json"))
+            if tokenizer_files:
+                console.print(f"[green]✓ Tokenizer saved ({len(tokenizer_files)} files)[/green]")
+            else:
+                console.print("[yellow]⚠ Warning: No tokenizer files detected after saving[/yellow]")
+                
+        except Exception as e:
+            console.print(f"[red]❌ Tokenizer saving failed: {e}[/red]")
+            import traceback
+            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            raise
+            
+        try:
+            # Save training stats with verification
+            console.print("[bold blue]Step 10: Saving training stats...[/bold blue]")
+            self._save_training_stats(trainer)
+            
+            # Verify stats file was created
+            stats_file = output_dir / "training_stats.json"
+            if stats_file.exists():
+                console.print("[green]✓ Training stats saved[/green]")
+            else:
+                console.print("[yellow]⚠ Warning: Training stats file not found[/yellow]")
+                
+        except Exception as e:
+            console.print(f"[red]❌ Training stats saving failed: {e}[/red]")
+            import traceback
+            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            # Don't raise here - stats saving is not critical
+            
+        console.print("[bold green]🎉 Training pipeline completed successfully![/bold green]")
+        console.print(f"[cyan]Final model location: {self.config['output_dir']}[/cyan]")
+        console.print(f"[cyan]Total training steps: {trainer.state.global_step}[/cyan]")
         
     def _save_training_stats(self, trainer):
         """Save training statistics and metrics."""

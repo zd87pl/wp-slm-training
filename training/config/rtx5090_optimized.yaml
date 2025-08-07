@@ -73,7 +73,7 @@ training:
   
   # Misc
   seed: 42
-  report_to: ["tensorboard"]
+  report_to: []                          # Disable all reporting to avoid dependency issues
   push_to_hub: false
 
 # Prompt template for WordPress domain
