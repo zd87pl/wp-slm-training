@@ -29,13 +29,11 @@ from peft import (
 from trl import SFTTrainer
 try:
     from trl import DataCollatorForCompletionOnlyLM
+    TRL_COMPLETION_COLLATOR_AVAILABLE = True
 except ImportError:
-    # For older TRL versions, use the alternative import path
-    try:
-        from transformers import DataCollatorForSeq2Seq as DataCollatorForCompletionOnlyLM
-    except ImportError:
-        # Fallback to basic data collator
-        DataCollatorForCompletionOnlyLM = None
+    # TRL DataCollatorForCompletionOnlyLM not available
+    DataCollatorForCompletionOnlyLM = None
+    TRL_COMPLETION_COLLATOR_AVAILABLE = False
 from datasets import load_dataset
 import tyro
 from rich.console import Console
@@ -264,7 +262,7 @@ class WPSFTTrainer:
         training_args = self.setup_training_args()
         
         # Set up data collator for completion-only training
-        if DataCollatorForCompletionOnlyLM is not None:
+        if TRL_COMPLETION_COLLATOR_AVAILABLE:
             response_template = "\nASSISTANT:"
             try:
                 data_collator = DataCollatorForCompletionOnlyLM(
@@ -272,14 +270,28 @@ class WPSFTTrainer:
                     tokenizer=self.tokenizer,
                     mlm=False
                 )
+                console.print("[green]Using TRL DataCollatorForCompletionOnlyLM[/green]")
             except TypeError:
                 # Handle different TRL versions with different parameters
-                data_collator = DataCollatorForCompletionOnlyLM(
-                    response_template=response_template,
-                    tokenizer=self.tokenizer
-                )
+                try:
+                    data_collator = DataCollatorForCompletionOnlyLM(
+                        response_template=response_template,
+                        tokenizer=self.tokenizer
+                    )
+                    console.print("[green]Using TRL DataCollatorForCompletionOnlyLM (simplified)[/green]")
+                except Exception as e:
+                    console.print(f"[yellow]TRL DataCollator failed: {e}[/yellow]")
+                    console.print("[yellow]Falling back to standard DataCollatorForSeq2Seq[/yellow]")
+                    from transformers import DataCollatorForSeq2Seq
+                    data_collator = DataCollatorForSeq2Seq(
+                        tokenizer=self.tokenizer,
+                        model=self.model,
+                        label_pad_token_id=-100,
+                        pad_to_multiple_of=8
+                    )
         else:
-            # Use default data collator if DataCollatorForCompletionOnlyLM not available
+            # Use standard data collator if TRL DataCollatorForCompletionOnlyLM not available
+            console.print("[yellow]TRL DataCollatorForCompletionOnlyLM not available, using DataCollatorForSeq2Seq[/yellow]")
             from transformers import DataCollatorForSeq2Seq
             data_collator = DataCollatorForSeq2Seq(
                 tokenizer=self.tokenizer,
