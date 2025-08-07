@@ -593,50 +593,104 @@ class WPSFTTrainer:
             output_dir = Path(self.config['output_dir'])
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            # Save model with explicit PEFT handling and debugging
-            console.print(f"[cyan]Debug: Output directory: {self.config['output_dir']}[/cyan]")
-            console.print(f"[cyan]Debug: Absolute path: {output_dir.absolute()}[/cyan]")
-            console.print(f"[cyan]Debug: Directory exists: {output_dir.exists()}[/cyan]")
-            console.print(f"[cyan]Debug: Model type: {type(self.model)}[/cyan]")
-            console.print(f"[cyan]Debug: Has save_pretrained: {hasattr(self.model, 'save_pretrained')}[/cyan]")
+            # EXPLICIT MODEL OUTPUT TRACKING
+            abs_output_path = output_dir.absolute()
+            console.print(f"[cyan]🎯 TARGET OUTPUT DIRECTORY: {abs_output_path}[/cyan]")
+            console.print(f"[cyan]📂 Directory exists before save: {output_dir.exists()}[/cyan]")
+            console.print(f"[cyan]🔍 Directory writable: {os.access(abs_output_path.parent, os.W_OK) if abs_output_path.parent.exists() else 'Parent not found'}[/cyan]")
+            
+            # Create directory with detailed logging
+            if not output_dir.exists():
+                console.print(f"[yellow]📁 Creating output directory: {abs_output_path}[/yellow]")
+                try:
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    console.print(f"[green]✓ Directory created successfully[/green]")
+                except Exception as dir_error:
+                    console.print(f"[red]❌ Failed to create directory: {escape(str(dir_error))}[/red]")
+                    raise dir_error
+            
+            # Pre-save file system state
+            console.print("[cyan]📋 PRE-SAVE FILE SYSTEM STATE:[/cyan]")
+            pre_files = list(output_dir.iterdir()) if output_dir.exists() else []
+            console.print(f"[cyan]Files before save: {len(pre_files)}[/cyan]")
+            for f in pre_files[:5]:
+                console.print(f"[cyan]  - {f.name}[/cyan]")
+            
+            # Model saving with comprehensive tracking
+            console.print(f"[cyan]🤖 Model type: {type(self.model)}[/cyan]")
+            console.print(f"[cyan]💾 Has save_pretrained: {hasattr(self.model, 'save_pretrained')}[/cyan]")
             
             if hasattr(self.model, 'save_pretrained'):
-                # For PEFT models, save the adapter
-                console.print("[yellow]Saving PEFT adapter model...[/yellow]")
+                console.print("[yellow]💾 SAVING PEFT ADAPTER MODEL...[/yellow]")
                 try:
-                    self.model.save_pretrained(str(output_dir))
-                    console.print(f"[green]✓ PEFT model saved to {output_dir}[/green]")
+                    # Force explicit path
+                    save_path = str(abs_output_path)
+                    console.print(f"[cyan]🎯 Saving to exact path: {save_path}[/cyan]")
+                    self.model.save_pretrained(save_path)
+                    console.print("[green]✅ PEFT model save_pretrained() completed[/green]")
                 except Exception as save_error:
                     console.print(f"[red]❌ PEFT model save failed: {escape(str(save_error))}[/red]")
                     raise save_error
                 
-                # Also save the trainer state
-                console.print("[yellow]Saving trainer state...[/yellow]")
+                # Save trainer state
+                console.print("[yellow]💾 SAVING TRAINER STATE...[/yellow]")
                 try:
                     trainer.save_state()
-                    console.print("[green]✓ Trainer state saved[/green]")
+                    console.print("[green]✅ Trainer state save completed[/green]")
                 except Exception as state_error:
                     console.print(f"[red]❌ Trainer state save failed: {escape(str(state_error))}[/red]")
                     raise state_error
             else:
-                # For standard models
-                console.print("[yellow]Saving standard model...[/yellow]")
+                console.print("[yellow]💾 SAVING STANDARD MODEL...[/yellow]")
                 try:
-                    trainer.save_model(str(output_dir))
-                    console.print(f"[green]✓ Standard model saved to {output_dir}[/green]")
+                    save_path = str(abs_output_path)
+                    console.print(f"[cyan]🎯 Saving to exact path: {save_path}[/cyan]")
+                    trainer.save_model(save_path)
+                    console.print("[green]✅ Standard model save completed[/green]")
                 except Exception as save_error:
                     console.print(f"[red]❌ Standard model save failed: {escape(str(save_error))}[/red]")
                     raise save_error
             
-            # Immediate verification after saving
-            console.print("[yellow]Immediately checking saved files...[/yellow]")
-            saved_files = list(output_dir.iterdir()) if output_dir.exists() else []
-            if saved_files:
-                console.print(f"[green]Found {len(saved_files)} files immediately after saving:[/green]")
-                for f in saved_files[:10]:
-                    console.print(f"[cyan]  - {f.name} ({f.stat().st_size if f.is_file() else 'dir'})[/cyan]")
-            else:
-                console.print(f"[red]❌ No files found in {output_dir} immediately after saving[/red]")
+            # IMMEDIATE POST-SAVE VERIFICATION WITH DETAILED LOGGING
+            console.print("[yellow]🔍 IMMEDIATE POST-SAVE VERIFICATION...[/yellow]")
+            
+            # Check if directory still exists
+            if not output_dir.exists():
+                console.print(f"[red]❌ CRITICAL ERROR: Output directory vanished after save: {abs_output_path}[/red]")
+                return
+                
+            # List all files with detailed info
+            try:
+                post_files = list(output_dir.iterdir())
+                console.print(f"[cyan]📊 POST-SAVE FILE COUNT: {len(post_files)}[/cyan]")
+                
+                if post_files:
+                    console.print("[green]✅ FILES FOUND AFTER SAVE:[/green]")
+                    total_size = 0
+                    for f in sorted(post_files):
+                        if f.is_file():
+                            size = f.stat().st_size
+                            total_size += size
+                            console.print(f"[green]  ✓ {f.name} ({size:,} bytes) - {f.stat().st_mtime}[/green]")
+                        else:
+                            console.print(f"[cyan]  📁 {f.name} (directory)[/cyan]")
+                    console.print(f"[green]📈 TOTAL SIZE: {total_size:,} bytes[/green]")
+                else:
+                    console.print("[red]❌ CRITICAL ERROR: NO FILES FOUND AFTER SAVE[/red]")
+                    
+            except Exception as verify_error:
+                console.print(f"[red]❌ Verification failed: {escape(str(verify_error))}[/red]")
+                
+            # Check specific expected files
+            expected_files = ['adapter_config.json', 'adapter_model.safetensors', 'training_args.bin']
+            console.print("[yellow]🎯 CHECKING EXPECTED FILES:[/yellow]")
+            for expected_file in expected_files:
+                file_path = output_dir / expected_file
+                if file_path.exists():
+                    size = file_path.stat().st_size
+                    console.print(f"[green]  ✅ {expected_file} ({size:,} bytes)[/green]")
+                else:
+                    console.print(f"[red]  ❌ {expected_file} MISSING[/red]")
             
             # Verify model was actually saved - check for various model file patterns
             model_patterns = [
