@@ -26,7 +26,16 @@ from peft import (
     prepare_model_for_kbit_training,
     TaskType
 )
-from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+from trl import SFTTrainer
+try:
+    from trl import DataCollatorForCompletionOnlyLM
+except ImportError:
+    # For older TRL versions, use the alternative import path
+    try:
+        from transformers import DataCollatorForSeq2Seq as DataCollatorForCompletionOnlyLM
+    except ImportError:
+        # Fallback to basic data collator
+        DataCollatorForCompletionOnlyLM = None
 from datasets import load_dataset
 import tyro
 from rich.console import Console
@@ -226,12 +235,29 @@ class WPSFTTrainer:
         training_args = self.setup_training_args()
         
         # Set up data collator for completion-only training
-        response_template = "\nASSISTANT:"
-        data_collator = DataCollatorForCompletionOnlyLM(
-            response_template=response_template,
-            tokenizer=self.tokenizer,
-            mlm=False
-        )
+        if DataCollatorForCompletionOnlyLM is not None:
+            response_template = "\nASSISTANT:"
+            try:
+                data_collator = DataCollatorForCompletionOnlyLM(
+                    response_template=response_template,
+                    tokenizer=self.tokenizer,
+                    mlm=False
+                )
+            except TypeError:
+                # Handle different TRL versions with different parameters
+                data_collator = DataCollatorForCompletionOnlyLM(
+                    response_template=response_template,
+                    tokenizer=self.tokenizer
+                )
+        else:
+            # Use default data collator if DataCollatorForCompletionOnlyLM not available
+            from transformers import DataCollatorForSeq2Seq
+            data_collator = DataCollatorForSeq2Seq(
+                tokenizer=self.tokenizer,
+                model=self.model,
+                label_pad_token_id=-100,
+                pad_to_multiple_of=8
+            )
         
         # Initialize trainer
         trainer = SFTTrainer(
