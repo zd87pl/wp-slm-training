@@ -18,6 +18,11 @@ os.environ['WANDB_DISABLED'] = 'true'
 # Force disable TensorBoard by setting an invalid path
 os.environ['TENSORBOARD_LOG_DIR'] = '/tmp/disabled_tensorboard'
 
+# Set Hugging Face token if available
+hf_token = os.environ.get('HUGGING_FACE_HUB_TOKEN') or os.environ.get('HF_TOKEN')
+if hf_token:
+    os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
+
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -101,23 +106,39 @@ class WPSFTTrainer:
                 )
             )
             
-        # Load tokenizer
+        # Load tokenizer with HF token support
+        hf_token = os.environ.get('HUGGING_FACE_HUB_TOKEN') or os.environ.get('HF_TOKEN')
+        tokenizer_kwargs = {
+            'trust_remote_code': True
+        }
+        if hf_token:
+            tokenizer_kwargs['token'] = hf_token
+            
+        console.print(f"[yellow]Loading tokenizer from {self.config['base_model']}...[/yellow]")
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.config['base_model'],
-            trust_remote_code=True
+            **tokenizer_kwargs
         )
         
         # Set padding token if not present
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+            console.print("[yellow]Set pad_token to eos_token[/yellow]")
             
-        # Load model
+        # Load model with HF token support
+        model_kwargs = {
+            'quantization_config': bnb_config,
+            'device_map': "auto",
+            'trust_remote_code': True,
+            'torch_dtype': torch.bfloat16 if self.config['training'].get('bf16', False) else torch.float16
+        }
+        if hf_token:
+            model_kwargs['token'] = hf_token
+            
+        console.print(f"[yellow]Loading model from {self.config['base_model']}...[/yellow]")
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config['base_model'],
-            quantization_config=bnb_config,
-            device_map="auto",
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16 if self.config['training'].get('bf16', False) else torch.float16
+            **model_kwargs
         )
         
         # Prepare model for training
@@ -364,20 +385,38 @@ class WPSFTTrainer:
         
     def train(self, train_file: str, eval_file: str, resume_from_checkpoint: Optional[str] = None):
         """Run the training process."""
-        # Set up model and tokenizer
-        self.setup_model_and_tokenizer()
-        
-        # Set up PEFT if configured
-        self.setup_peft()
-        
-        # Load datasets
-        self.load_datasets(train_file, eval_file)
-        
-        # Preprocess datasets with proper tokenization
-        self.preprocess_datasets()
-        
-        # Set up training arguments
-        training_args = self.setup_training_args()
+        try:
+            # Set up model and tokenizer
+            console.print("[bold blue]Step 1: Setting up model and tokenizer...[/bold blue]")
+            self.setup_model_and_tokenizer()
+            console.print("[green]✓ Model and tokenizer setup completed[/green]")
+            
+            # Set up PEFT if configured
+            console.print("[bold blue]Step 2: Setting up PEFT (LoRA)...[/bold blue]")
+            self.setup_peft()
+            console.print("[green]✓ PEFT setup completed[/green]")
+            
+            # Load datasets
+            console.print("[bold blue]Step 3: Loading datasets...[/bold blue]")
+            self.load_datasets(train_file, eval_file)
+            console.print("[green]✓ Dataset loading completed[/green]")
+            
+            # Preprocess datasets with proper tokenization
+            console.print("[bold blue]Step 4: Preprocessing datasets...[/bold blue]")
+            self.preprocess_datasets()
+            console.print("[green]✓ Dataset preprocessing completed[/green]")
+            
+            # Set up training arguments
+            console.print("[bold blue]Step 5: Setting up training arguments...[/bold blue]")
+            training_args = self.setup_training_args()
+            console.print("[green]✓ Training arguments setup completed[/green]")
+            
+        except Exception as e:
+            console.print(f"[red]❌ Training setup failed during initialization: {e}[/red]")
+            console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
+            import traceback
+            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            raise
         
         # Set up data collator for completion-only training
         if TRL_COMPLETION_COLLATOR_AVAILABLE:
@@ -428,40 +467,53 @@ class WPSFTTrainer:
         except Exception as e:
             console.print(f"[yellow]Warning: Could not disable TensorBoard integration: {e}[/yellow]")
 
-        # Initialize trainer with maximum version compatibility
-        base_kwargs = {
-            'model': self.model,
-            'args': training_args,
-            'train_dataset': self.train_dataset,
-            'eval_dataset': self.eval_dataset,
-        }
-        
-        # Since we've preprocessed the data, we don't need formatting_func, tokenizer, or max_seq_length
-        # These would conflict with our preprocessed tokenized data
-        optional_kwargs = {
-            'data_collator': data_collator,
-        }
-        
-        # Try different combinations of parameters for preprocessed data compatibility
-        attempts = [
-            # Try with data collator
-            {**base_kwargs, **optional_kwargs},
-            # Minimal parameters only (no data collator)
-            base_kwargs
-        ]
-        
-        trainer = None
-        for i, kwargs in enumerate(attempts):
-            try:
-                trainer = SFTTrainer(**kwargs)
-                console.print(f"[green]SFTTrainer initialized successfully (attempt {i+1})[/green]")
-                break
-            except TypeError as e:
-                console.print(f"[yellow]SFTTrainer attempt {i+1} failed: {e}[/yellow]")
-                continue
-        
-        if trainer is None:
-            raise RuntimeError("Could not initialize SFTTrainer with any parameter combination")
+        try:
+            # Initialize trainer with maximum version compatibility
+            console.print("[bold blue]Step 6: Initializing SFTTrainer...[/bold blue]")
+            base_kwargs = {
+                'model': self.model,
+                'args': training_args,
+                'train_dataset': self.train_dataset,
+                'eval_dataset': self.eval_dataset,
+            }
+            
+            # Since we've preprocessed the data, we don't need formatting_func, tokenizer, or max_seq_length
+            # These would conflict with our preprocessed tokenized data
+            optional_kwargs = {
+                'data_collator': data_collator,
+            }
+            
+            # Try different combinations of parameters for preprocessed data compatibility
+            attempts = [
+                # Try with data collator
+                {**base_kwargs, **optional_kwargs},
+                # Minimal parameters only (no data collator)
+                base_kwargs
+            ]
+            
+            trainer = None
+            for i, kwargs in enumerate(attempts):
+                try:
+                    console.print(f"[yellow]Attempting SFTTrainer initialization (attempt {i+1})...[/yellow]")
+                    trainer = SFTTrainer(**kwargs)
+                    console.print(f"[green]✓ SFTTrainer initialized successfully (attempt {i+1})[/green]")
+                    break
+                except TypeError as e:
+                    console.print(f"[yellow]SFTTrainer attempt {i+1} failed: {e}[/yellow]")
+                    continue
+                except Exception as e:
+                    console.print(f"[red]SFTTrainer attempt {i+1} failed with unexpected error: {e}[/red]")
+                    continue
+            
+            if trainer is None:
+                raise RuntimeError("Could not initialize SFTTrainer with any parameter combination")
+                
+        except Exception as e:
+            console.print(f"[red]❌ SFTTrainer initialization failed: {e}[/red]")
+            console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
+            import traceback
+            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            raise
         
         # Restore original TensorBoard availability function
         try:
@@ -470,22 +522,35 @@ class WPSFTTrainer:
         except Exception:
             pass  # Ignore restoration errors
         
-        # Start training
-        console.print("[bold green]Starting training...[/bold green]")
-        
-        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
-        
-        # Save final model
-        console.print("[yellow]Saving final model...[/yellow]")
-        trainer.save_model()
-        
-        # Save tokenizer
-        self.tokenizer.save_pretrained(self.config['output_dir'])
-        
-        # Save training stats
-        self._save_training_stats(trainer)
-        
-        console.print("[bold green]Training completed successfully![/bold green]")
+        try:
+            # Start training
+            console.print("[bold green]Step 7: Starting training...[/bold green]")
+            trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+            console.print("[green]✓ Training completed successfully[/green]")
+            
+            # Save final model
+            console.print("[bold blue]Step 8: Saving final model...[/bold blue]")
+            trainer.save_model()
+            console.print("[green]✓ Model saved[/green]")
+            
+            # Save tokenizer
+            console.print("[bold blue]Step 9: Saving tokenizer...[/bold blue]")
+            self.tokenizer.save_pretrained(self.config['output_dir'])
+            console.print("[green]✓ Tokenizer saved[/green]")
+            
+            # Save training stats
+            console.print("[bold blue]Step 10: Saving training stats...[/bold blue]")
+            self._save_training_stats(trainer)
+            console.print("[green]✓ Training stats saved[/green]")
+            
+            console.print("[bold green]🎉 Training pipeline completed successfully![/bold green]")
+            
+        except Exception as e:
+            console.print(f"[red]❌ Training failed during execution: {e}[/red]")
+            console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
+            import traceback
+            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            raise
         
     def _save_training_stats(self, trainer):
         """Save training statistics and metrics."""
