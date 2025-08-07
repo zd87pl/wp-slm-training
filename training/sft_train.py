@@ -50,6 +50,7 @@ except ImportError:
 from datasets import load_dataset
 import tyro
 from rich.console import Console
+from rich.markup import escape
 
 console = Console()
 
@@ -412,10 +413,11 @@ class WPSFTTrainer:
             console.print("[green]✓ Training arguments setup completed[/green]")
             
         except Exception as e:
-            console.print(f"[red]❌ Training setup failed during initialization: {e}[/red]")
+            console.print(f"[red]❌ Training setup failed during initialization: {escape(str(e))}[/red]")
             console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
             import traceback
-            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            console.print("[yellow]Full traceback:[/yellow]")
+            console.print(escape(traceback.format_exc()))
             raise
         
         # Set up data collator for completion-only training
@@ -509,10 +511,11 @@ class WPSFTTrainer:
                 raise RuntimeError("Could not initialize SFTTrainer with any parameter combination")
                 
         except Exception as e:
-            console.print(f"[red]❌ SFTTrainer initialization failed: {e}[/red]")
+            console.print(f"[red]❌ SFTTrainer initialization failed: {escape(str(e))}[/red]")
             console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
             import traceback
-            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            console.print("[yellow]Full traceback:[/yellow]")
+            console.print(escape(traceback.format_exc()))
             raise
         
         # Restore original TensorBoard availability function
@@ -554,7 +557,7 @@ class WPSFTTrainer:
             
         except torch.cuda.OutOfMemoryError as e:
             console.print("[red]❌ GPU Out of Memory Error during training[/red]")
-            console.print(f"[yellow]CUDA OOM: {e}[/yellow]")
+            console.print(f"[yellow]CUDA OOM: {escape(str(e))}[/yellow]")
             console.print("[yellow]Suggestions:[/yellow]")
             console.print("[yellow]  1. Reduce per_device_train_batch_size[/yellow]")
             console.print("[yellow]  2. Increase gradient_accumulation_steps[/yellow]")
@@ -562,7 +565,7 @@ class WPSFTTrainer:
             console.print("[yellow]  4. Enable gradient_checkpointing[/yellow]")
             raise
         except RuntimeError as e:
-            console.print(f"[red]❌ Runtime error during training: {e}[/red]")
+            console.print(f"[red]❌ Runtime error during training: {escape(str(e))}[/red]")
             console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
             # Check for common runtime errors
             if "CUDA" in str(e):
@@ -570,14 +573,16 @@ class WPSFTTrainer:
             elif "memory" in str(e).lower():
                 console.print("[yellow]This appears to be a memory-related error[/yellow]")
             import traceback
-            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            console.print("[yellow]Full traceback:[/yellow]")
+            console.print(escape(traceback.format_exc()))
             raise
         except Exception as e:
-            console.print(f"[red]❌ Unexpected error during training: {e}[/red]")
+            console.print(f"[red]❌ Unexpected error during training: {escape(str(e))}[/red]")
             console.print(f"[yellow]Error type: {type(e).__name__}[/yellow]")
-            console.print(f"[yellow]Error details: {str(e)}[/yellow]")
+            console.print(f"[yellow]Error details: {escape(str(e))}[/yellow]")
             import traceback
-            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            console.print("[yellow]Full traceback:[/yellow]")
+            console.print(escape(traceback.format_exc()))
             raise
         
         try:
@@ -634,9 +639,10 @@ class WPSFTTrainer:
                     raise RuntimeError(f"Model saving failed - output directory is empty: {output_dir}")
                 
         except Exception as e:
-            console.print(f"[red]❌ Model saving failed: {e}[/red]")
+            console.print(f"[red]❌ Model saving failed: {escape(str(e))}[/red]")
             import traceback
-            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            console.print("[yellow]Full traceback:[/yellow]")
+            console.print(escape(traceback.format_exc()))
             raise
             
         try:
@@ -652,9 +658,10 @@ class WPSFTTrainer:
                 console.print("[yellow]⚠ Warning: No tokenizer files detected after saving[/yellow]")
                 
         except Exception as e:
-            console.print(f"[red]❌ Tokenizer saving failed: {e}[/red]")
+            console.print(f"[red]❌ Tokenizer saving failed: {escape(str(e))}[/red]")
             import traceback
-            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            console.print("[yellow]Full traceback:[/yellow]")
+            console.print(escape(traceback.format_exc()))
             raise
             
         try:
@@ -670,9 +677,10 @@ class WPSFTTrainer:
                 console.print("[yellow]⚠ Warning: Training stats file not found[/yellow]")
                 
         except Exception as e:
-            console.print(f"[red]❌ Training stats saving failed: {e}[/red]")
+            console.print(f"[red]❌ Training stats saving failed: {escape(str(e))}[/red]")
             import traceback
-            console.print(f"[yellow]Full traceback:\n{traceback.format_exc()}[/yellow]")
+            console.print("[yellow]Full traceback:[/yellow]")
+            console.print(escape(traceback.format_exc()))
             # Don't raise here - stats saving is not critical
             
         console.print("[bold green]🎉 Training pipeline completed successfully![/bold green]")
