@@ -166,23 +166,76 @@ class WPSFTTrainer:
         console.print(f"[green]Loaded {len(self.eval_dataset)} evaluation examples[/green]")
         
     def formatting_func(self, example):
-        """Format examples using the prompt template."""
-        template = self.config.get('prompt_template', "{prompt}\n{response}")
-        
-        # Handle both single examples and batches
-        if isinstance(example['prompt'], list):
-            # Batch processing
-            texts = []
-            for prompt, response in zip(example['prompt'], example['response']):
-                text = template.format(prompt=prompt, response=response)
-                texts.append(text)
-            return texts
-        else:
-            # Single example
-            return template.format(
-                prompt=example['prompt'],
-                response=example['response']
-            )
+        """Format training examples for SFT training with robust key handling"""
+        try:
+            # Debug: Print example structure for first few samples
+            if not hasattr(self, '_debug_printed'):
+                console.print(f"[blue]Dataset example keys: {list(example.keys())}[/blue]")
+                console.print(f"[blue]Dataset example structure: {example}[/blue]")
+                self._debug_printed = True
+            
+            # Handle different key variations commonly found in datasets
+            prompt_keys = ['prompt', 'input', 'question', 'instruction', 'text']
+            response_keys = ['response', 'output', 'answer', 'completion', 'target']
+            
+            prompt = None
+            response = None
+            
+            # Find prompt
+            for key in prompt_keys:
+                if key in example and example[key]:
+                    prompt = example[key]
+                    break
+            
+            # Find response
+            for key in response_keys:
+                if key in example and example[key]:
+                    response = example[key]
+                    break
+            
+            # Handle conversation format (messages)
+            if 'messages' in example:
+                messages = example['messages']
+                if isinstance(messages, list):
+                    formatted_parts = []
+                    for msg in messages:
+                        role = msg.get('role', 'unknown')
+                        content = msg.get('content', '')
+                        if role == 'user':
+                            formatted_parts.append(f"Human: {content}")
+                        elif role == 'assistant':
+                            formatted_parts.append(f"Assistant: {content}")
+                        else:
+                            formatted_parts.append(f"{role.title()}: {content}")
+                    return "\n\n".join(formatted_parts)
+            
+            # Handle direct text field
+            if 'text' in example:
+                return example['text']
+            
+            # Handle prompt-response format
+            if prompt and response:
+                return f"Human: {prompt}\n\nAssistant: {response}"
+            elif prompt:
+                return f"Human: {prompt}\n\nAssistant: "
+            else:
+                # Fallback: use any available text content
+                available_text = []
+                for key, value in example.items():
+                    if isinstance(value, str) and value.strip():
+                        available_text.append(f"{key}: {value}")
+                
+                if available_text:
+                    return "\n".join(available_text)
+                else:
+                    console.print(f"[red]Warning: No usable text found in example: {list(example.keys())}[/red]")
+                    return "Human: No content available\n\nAssistant: I don't have enough information to respond."
+                
+        except Exception as e:
+            console.print(f"[red]Error formatting example: {e}[/red]")
+            console.print(f"[yellow]Example type: {type(example)}[/yellow]")
+            console.print(f"[yellow]Example keys: {list(example.keys()) if hasattr(example, 'keys') else 'No keys method'}[/yellow]")
+            return "Human: Error processing example\n\nAssistant: I encountered an error processing this example."
             
     def setup_training_args(self):
         """Set up training arguments."""
@@ -314,10 +367,10 @@ class WPSFTTrainer:
             'formatting_func': self.formatting_func,
             'data_collator': data_collator,
             'max_seq_length': self.config['training']['max_seq_length'],
-            'packing': False,
         }
         
         # Try different combinations of parameters for maximum compatibility
+        # Note: Removed 'packing' parameter as it's not supported in many TRL versions
         attempts = [
             # Try all parameters
             {**base_kwargs, **optional_kwargs},
@@ -325,8 +378,8 @@ class WPSFTTrainer:
             {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k != 'tokenizer'}},
             # Without tokenizer and max_seq_length
             {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k not in ['tokenizer', 'max_seq_length']}},
-            # Without tokenizer, max_seq_length, and packing
-            {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k not in ['tokenizer', 'max_seq_length', 'packing']}},
+            # Without tokenizer and formatting_func (use default)
+            {**base_kwargs, **{k: v for k, v in optional_kwargs.items() if k not in ['tokenizer', 'formatting_func']}},
             # Minimal parameters only
             base_kwargs
         ]
