@@ -265,6 +265,7 @@ class WPSFTTrainer:
             'seed': training_config['seed'],
             'push_to_hub': training_config.get('push_to_hub', False),
             'remove_unused_columns': False,
+            'report_to': [],  # Disable all reporting (TensorBoard, wandb, etc) to avoid dependency issues
         }
         
         # Handle evaluation strategy with version compatibility
