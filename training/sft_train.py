@@ -593,19 +593,50 @@ class WPSFTTrainer:
             output_dir = Path(self.config['output_dir'])
             output_dir.mkdir(parents=True, exist_ok=True)
             
-            # Save model with explicit PEFT handling
+            # Save model with explicit PEFT handling and debugging
+            console.print(f"[cyan]Debug: Output directory: {self.config['output_dir']}[/cyan]")
+            console.print(f"[cyan]Debug: Absolute path: {output_dir.absolute()}[/cyan]")
+            console.print(f"[cyan]Debug: Directory exists: {output_dir.exists()}[/cyan]")
+            console.print(f"[cyan]Debug: Model type: {type(self.model)}[/cyan]")
+            console.print(f"[cyan]Debug: Has save_pretrained: {hasattr(self.model, 'save_pretrained')}[/cyan]")
+            
             if hasattr(self.model, 'save_pretrained'):
                 # For PEFT models, save the adapter
                 console.print("[yellow]Saving PEFT adapter model...[/yellow]")
-                self.model.save_pretrained(self.config['output_dir'])
+                try:
+                    self.model.save_pretrained(str(output_dir))
+                    console.print(f"[green]✓ PEFT model saved to {output_dir}[/green]")
+                except Exception as save_error:
+                    console.print(f"[red]❌ PEFT model save failed: {escape(str(save_error))}[/red]")
+                    raise save_error
                 
                 # Also save the trainer state
                 console.print("[yellow]Saving trainer state...[/yellow]")
-                trainer.save_state()
+                try:
+                    trainer.save_state()
+                    console.print("[green]✓ Trainer state saved[/green]")
+                except Exception as state_error:
+                    console.print(f"[red]❌ Trainer state save failed: {escape(str(state_error))}[/red]")
+                    raise state_error
             else:
                 # For standard models
                 console.print("[yellow]Saving standard model...[/yellow]")
-                trainer.save_model(self.config['output_dir'])
+                try:
+                    trainer.save_model(str(output_dir))
+                    console.print(f"[green]✓ Standard model saved to {output_dir}[/green]")
+                except Exception as save_error:
+                    console.print(f"[red]❌ Standard model save failed: {escape(str(save_error))}[/red]")
+                    raise save_error
+            
+            # Immediate verification after saving
+            console.print("[yellow]Immediately checking saved files...[/yellow]")
+            saved_files = list(output_dir.iterdir()) if output_dir.exists() else []
+            if saved_files:
+                console.print(f"[green]Found {len(saved_files)} files immediately after saving:[/green]")
+                for f in saved_files[:10]:
+                    console.print(f"[cyan]  - {f.name} ({f.stat().st_size if f.is_file() else 'dir'})[/cyan]")
+            else:
+                console.print(f"[red]❌ No files found in {output_dir} immediately after saving[/red]")
             
             # Verify model was actually saved - check for various model file patterns
             model_patterns = [
