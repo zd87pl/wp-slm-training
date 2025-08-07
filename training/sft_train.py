@@ -590,14 +590,48 @@ class WPSFTTrainer:
             
             trainer.save_model()
             
-            # Verify model was actually saved
-            model_files = list(output_dir.glob("*.bin")) + list(output_dir.glob("*.safetensors")) + list(output_dir.glob("adapter_*.json"))
+            # Verify model was actually saved - check for various model file patterns
+            model_patterns = [
+                "*.bin", "*.safetensors",  # Model weights
+                "adapter_*.json", "adapter_config.json",  # LoRA adapter files
+                "pytorch_model.bin", "model.safetensors",  # Standard model files
+                "config.json",  # Model configuration
+                "training_args.bin"  # Training arguments
+            ]
+            
+            model_files = []
+            for pattern in model_patterns:
+                model_files.extend(list(output_dir.glob(pattern)))
+            
+            # Also check for any .bin or .safetensors files in subdirectories
+            model_files.extend(list(output_dir.rglob("*.bin")))
+            model_files.extend(list(output_dir.rglob("*.safetensors")))
+            
+            # Remove duplicates
+            model_files = list(set(model_files))
+            
             if model_files:
                 console.print(f"[green]✓ Model saved ({len(model_files)} files)[/green]")
-                for f in model_files[:3]:  # Show first 3 files
-                    console.print(f"[cyan]  - {f.name}[/cyan]")
+                for f in sorted(model_files)[:5]:  # Show first 5 files
+                    console.print(f"[cyan]  - {f.name} ({f.stat().st_size} bytes)[/cyan]")
+                if len(model_files) > 5:
+                    console.print(f"[cyan]  ... and {len(model_files) - 5} more files[/cyan]")
             else:
-                raise RuntimeError(f"Model saving failed - no model files found in {output_dir}")
+                console.print(f"[yellow]⚠ Warning: No standard model files detected in {output_dir}[/yellow]")
+                # List all files in the directory for debugging
+                all_files = list(output_dir.iterdir())
+                if all_files:
+                    console.print(f"[yellow]Files found in output directory:[/yellow]")
+                    for f in all_files[:10]:  # Show first 10 files
+                        if f.is_file():
+                            console.print(f"[yellow]  - {f.name} ({f.stat().st_size} bytes)[/yellow]")
+                        else:
+                            console.print(f"[yellow]  - {f.name}/ (directory)[/yellow]")
+                    if len(all_files) > 10:
+                        console.print(f"[yellow]  ... and {len(all_files) - 10} more items[/yellow]")
+                else:
+                    console.print(f"[red]❌ No files found in {output_dir}[/red]")
+                    raise RuntimeError(f"Model saving failed - output directory is empty: {output_dir}")
                 
         except Exception as e:
             console.print(f"[red]❌ Model saving failed: {e}[/red]")
