@@ -5,6 +5,10 @@
 base_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
 output_dir: ./models/wp-slm-rtx5090
 
+# Dataset Configuration
+train_file: data/enhanced_training_data.json
+eval_file: data/enhanced_training_data.json  # Using same file for eval, script will split it
+
 # LoRA Configuration - Higher rank due to abundant VRAM
 lora:
   r: 64                    # Higher rank for RTX 5090 (vs 8-16 for smaller GPUs)
