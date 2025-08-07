@@ -1,0 +1,84 @@
+# RTX 5090 Optimized WordPress SLM Training Configuration
+# Optimized for 32GB VRAM, targeting >98% improvement over base model
+# Last updated: 2025-01-07
+
+base_model: microsoft/DialoGPT-medium
+output_dir: ./models/wp-slm-rtx5090
+
+# LoRA Configuration - Higher rank due to abundant VRAM
+lora:
+  r: 64                    # Higher rank for RTX 5090 (vs 8-16 for smaller GPUs)
+  alpha: 128               # Higher alpha for better adaptation
+  dropout: 0.1             # Slightly higher dropout for regularization
+  target_modules:          # Comprehensive module targeting
+    - q_proj
+    - v_proj
+    - k_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+# Quantization Configuration - Disabled for RTX 5090 (plenty of VRAM)
+quantization:
+  load_in_4bit: false      # No quantization needed with 32GB VRAM
+  bnb_4bit_compute_dtype: bfloat16
+  bnb_4bit_use_double_quant: false
+  bnb_4bit_quant_type: "nf4"
+
+# Training Configuration - RTX 5090 Optimized
+training:
+  # Basic settings - Aggressive for RTX 5090
+  num_train_epochs: 3
+  per_device_train_batch_size: 16    # Large batch size for 32GB VRAM
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 4     # High accumulation for effective batch size 64
+  gradient_checkpointing: true       # Memory optimization
+  
+  # Learning rate - Optimized for WordPress domain
+  learning_rate: 0.0001              # Higher learning rate for faster convergence
+  lr_scheduler_type: "cosine"        # Cosine annealing for better convergence
+  warmup_ratio: 0.05                 # Short warmup for efficiency
+  
+  # Optimizer - RTX 5090 optimized
+  optim: "adamw_torch"               # Standard AdamW for RTX 5090
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  
+  # Sequence length - Longer sequences for RTX 5090
+  max_seq_length: 2048               # Longer sequences with abundant VRAM
+  
+  # Logging and saving
+  logging_steps: 10
+  eval_steps: 100                    # More frequent evaluation
+  save_steps: 200                    # Frequent checkpoints
+  save_strategy: "steps"
+  eval_strategy: "steps"             # Fixed from evaluation_strategy
+  save_total_limit: 5                # More checkpoints due to larger storage
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  
+  # Mixed precision - RTX 5090 optimized
+  bf16: false                        # Use fp16 for RTX 5090 compatibility
+  fp16: true                         # RTX 5090 optimized precision
+  tf32: true                         # Enable TF32 for RTX 5090 performance
+  
+  # Memory and performance optimization
+  dataloader_pin_memory: true        # Pin memory for faster data loading
+  dataloader_num_workers: 12         # Multiple workers for data loading
+  group_by_length: true              # Group by length for efficiency
+  
+  # Misc
+  seed: 42
+  report_to: ["tensorboard"]
+  push_to_hub: false
+
+# Prompt template for WordPress domain
+prompt_template: |
+  You are an expert WordPress developer and consultant with deep knowledge of WordPress core, plugins, themes, security, and best practices.
+  
+  USER: {prompt}
+  ASSISTANT: {response}
